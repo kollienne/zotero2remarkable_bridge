@@ -1,3 +1,4 @@
+import logging
 import os
 import zipfile
 import tempfile
@@ -12,31 +13,31 @@ from time import sleep
 from datetime import datetime
 
 
+logger = logging.getLogger()
 
 def sync_to_rm(item, zot, folders):
     temp_path = Path(tempfile.gettempdir())
     item_id = item["key"]
     attachments = zot.children(item_id)
+    logger.info(f"Syncing {len(attachments)} to reMarkable")
     for entry in attachments:
         if "contentType" in entry["data"] and entry["data"]["contentType"] == "application/pdf":
             attachment_id = attachments[attachments.index(entry)]["key"]
             attachment_name = zot.item(attachment_id)["data"]["filename"]
-            print(f"Processing {attachment_name}...")
+            logger.info(f"Processing {attachment_name}...")
                 
             # Get actual file and repack it in reMarkable's file format
-            file_name = zot.dump(attachment_id, path=temp_path)
+            zot.dump(attachment_id, path=temp_path)
+            file_name = temp_path / attachment_name
             if file_name:
-                upload = rmapi.upload_file(file_name, f"/Zotero/{folders['unread']}")
-            else: 
-                upload = None
-            if upload:
-                zot.add_tags(item, "synced")
-                os.remove(file_name)
-                print(f"Uploaded {attachment_name} to reMarkable.")
-            else:
-                print(f"Failed to upload {attachment_name} to reMarkable.")
+                if rmapi.upload_file(file_name, f"/Zotero/{folders['unread']}"):
+                    zot.add_tags(item, "synced")
+                    os.remove(file_name)
+                    logger.info(f"Uploaded {attachment_name} to reMarkable.")
+                else:
+                    logger.error(f"Failed to upload {attachment_name} to reMarkable.")
         else:
-            print("Found attachment, but it's not a PDF, skipping...")
+            logger.warning("Found attachment, but it's not a PDF, skipping...")
         
        
 def sync_to_rm_webdav(item, zot, webdav, folders):
@@ -47,7 +48,7 @@ def sync_to_rm_webdav(item, zot, webdav, folders):
         if "contentType" in entry["data"] and entry["data"]["contentType"] == "application/pdf":
             attachment_id = attachments[attachments.index(entry)]["key"]
             attachment_name = zot.item(attachment_id)["data"]["filename"]
-            print(f"Processing {attachment_name}...")
+            logger.info(f"Processing {attachment_name}...")
     
             # Get actual file from webdav, extract it and repack it in reMarkable's file format
             file_name = f"{attachment_id}.zip"
@@ -56,6 +57,7 @@ def sync_to_rm_webdav(item, zot, webdav, folders):
             webdav.download_sync(remote_path=file_name, local_path=file_path)
             with zipfile.ZipFile(file_path) as zf:
                 zf.extractall(unzip_path)
+                zf.extractall(".")
             if (unzip_path / attachment_name ).is_file():
                 uploader = rmapi.upload_file(str(unzip_path / attachment_name), f"/Zotero/{folders['unread']}")
             else:
@@ -63,30 +65,30 @@ def sync_to_rm_webdav(item, zot, webdav, folders):
                     leading to reported file names diverging from the actual one. 
                     To prevent this from stopping the whole program due to missing
                     file errors, skip that file. Probably it could be worked around better though.""" 
-                print("PDF not found in downloaded file. Filename might be different. Try renaming file in Zotero, sync and try again.")
+                logger.warning("PDF not found in downloaded file. Filename might be different. Try renaming file in Zotero, sync and try again.")
                 break
             if uploader:
                 zot.add_tags(item, "synced")
                 file_path.unlink()
                 rmtree(unzip_path)
-                print(f"Uploaded {attachment_name} to reMarkable.")
+                logger.info(f"Uploaded {attachment_name} to reMarkable.")
             else:
-                print(f"Failed to upload {attachment_name} to reMarkable.")
+                logger.error(f"Failed to upload {attachment_name} to reMarkable.")
         else:
-            print("Found attachment, but it's not a PDF, skipping...")
+            logger.info("Found attachment, but it's not a PDF, skipping...")
 
 
 def download_from_rm(entity, folder, content_id):
     temp_path = Path(tempfile.gettempdir())
-    print(f"Processing {entity}...")
+    logger.info(f"Processing {entity}...")
     zip_name = f"{entity}.zip"
     file_path = temp_path / zip_name
     unzip_path = temp_path / f"{entity}-unzipped"
     download = rmapi.download_file(f"{folder}{entity}", str(temp_path))
     if download:
-        print("File downloaded")
+        logger.info("File downloaded")
     else:
-        print("Failed to download file")
+        logger.warn("Failed to download file")
 
     with zipfile.ZipFile(file_path, "r") as zf:
         zf.extractall(unzip_path)
@@ -94,12 +96,12 @@ def download_from_rm(entity, folder, content_id):
     renderer = remarks
     args = {"combined_pdf": True, "combined_md": False, "ann_type": ["scribbles", "highlights"]}
     renderer.run_remarks(unzip_path, temp_path, **args)
-    print("PDF rendered")
+    logging.info("PDF rendered")
     pdf = (temp_path / f"{entity} _remarks.pdf")
     pdf = pdf.rename(pdf.with_stem(f"{entity}"))
     pdf_name = pdf.name
 
-    print("PDF written")
+    logging.info("PDF written")
     file_path.unlink()
     rmtree(unzip_path)
 
@@ -118,9 +120,9 @@ def zotero_upload(pdf_name, zot):
                 upload = zot.attachment_simple([new_pdf_name], item_id)                
                 
                 if upload["success"] != []:
-                    print(f"{pdf_name} uploaded to Zotero.")
+                    logging.info(f"{pdf_name} uploaded to Zotero.")
                 else:
-                    print(f"Upload of {pdf_name} failed...")
+                    logging.error(f"Upload of {pdf_name} failed...")
                 return
 
 
@@ -176,7 +178,7 @@ def zotero_upload_webdav(pdf_name, zot, webdav):
                 if create_attachment["success"] != []:
                     key = create_attachment["success"]["0"]
                 else:
-                    print("Failed to create attachment, aborting...")
+                    logging.info("Failed to create attachment, aborting...")
                     continue
                 
                 attachment_zip = temp_path / f"{key}.zip"
@@ -186,9 +188,9 @@ def zotero_upload_webdav(pdf_name, zot, webdav):
                 
                 attachment_upload = webdav_uploader(webdav, remote_attachment_zip, attachment_zip)
                 if attachment_upload:
-                    print("Attachment upload successfull, proceeding...")
+                    logging.info("Attachment upload successfull, proceeding...")
                 else:
-                    print("Failed uploading attachment, skipping...")
+                    logging.error("Failed uploading attachment, skipping...")
                     continue
 
                 """For the file to be properly recognized in Zotero, a propfile needs to be
@@ -202,13 +204,13 @@ def zotero_upload_webdav(pdf_name, zot, webdav):
                 
                 propfile_upload = webdav_uploader(webdav, remote_propfile, propfile)
                 if propfile_upload:
-                    print("Propfile upload successful, proceeding...")
+                    logging.info("Propfile upload successful, proceeding...")
                 else:
-                    print("Propfile upload failed, skipping...")
+                    logging.error("Propfile upload failed, skipping...")
                     continue
                             
                 zot.add_tags(item, "read")
-                print(f"{pdf_name.name} uploaded to Zotero.")
+                logging.info(f"{pdf_name.name} uploaded to Zotero.")
                 (temp_path / pdf_name).unlink()
                 (temp_path / attachment_zip).unlink()
                 (temp_path / propfile).unlink()

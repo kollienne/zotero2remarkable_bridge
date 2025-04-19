@@ -27,8 +27,8 @@ def load_config(config_file):
 def write_config(file_name):
     config_data = {}
     input("Couldn't find config file. Let's create one! Press Enter to continue...")
-    config_data["UNREAD_FOLDER"] = input("Which ReMarkable folder should files be synced to?")
-    config_data["READ_FOLDER"] = input("Which ReMarkable folder should files be synced from?")
+    config_data["UNREAD_FOLDER"] = input("Which ReMarkable folder should files be synced to? ")
+    config_data["READ_FOLDER"] = input("Which ReMarkable folder should files be synced from? ")
     config_data["LIBRARY_ID"] = input("Enter Zotero library ID: ")
     config_data["LIBRARY_TYPE"] = input("Enter Zotero library type (user/group): ")
     config_data["API_KEY"] = input("Enter Zotero API key: ")

@@ -1,22 +1,25 @@
 #!/usr/bin/python3
-
+import logging
 import sys
 import getopt
-import rmapi_shim as rmapi
 from tqdm import tqdm
 from config_functions import *
 from sync_functions import *
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
+logger.addHandler(logging.FileHandler(filename="sync.log"))
 
 def push(zot, webdav, folders):
     sync_items = zot.items(tag="to_sync")
-    print(f"Found {len(sync_items)} elements to sync...")
+    logger.info(f"Found {len(sync_items)} elements to sync...")
     for item in tqdm(sync_items):
         if webdav:
             sync_to_rm_webdav(item, zot, webdav, folders)
         else:
             sync_to_rm(item, zot, folders)
-    zot.delete_tags("to_sync")
+    # zot.delete_tags("to_sync")
 
 
 def pull(zot, webdav, read_folder):
@@ -30,7 +33,7 @@ def pull(zot, webdav, read_folder):
             else:
                 zotero_upload(pdf_name, zot)
     else:
-        print("No files to pull found")
+        logger.info("No files to pull found")
 
 
 def main(argv):
@@ -45,34 +48,37 @@ def main(argv):
     try:
         opts, args = getopt.getopt(argv, "m:")
     except getopt.GetoptError:
-        print("No argument recognized")
+        logger.error("No argument recognized")
         sys.exit()
-    
-    for opt, arg in opts:
-        if opt == "-m":
-            if arg == "push":
-                # Only sync files from Zotero to reMarkable
-                print("Pushing...")
-                push(zot, webdav, folders)
 
-            elif arg == "pull":
-                # Only get files from ReMarkable and upload to Zotero
-                print("Pulling...")
-                pull(zot, webdav, read_folder)
-                
-            elif arg == "both":
-                # Do both
-                print("Do both...")
-                # Upload...
-                push(zot, webdav, folders)
-                
-                # ...and download, add highlighting and sync to Zotero.
+    try:
+        for opt, arg in opts:
+            if opt == "-m":
+                if arg == "push":
+                    # Only sync files from Zotero to reMarkable
+                    logger.info("Pushing...")
+                    push(zot, webdav, folders)
 
-                pull(zot, webdav, read_folder)
+                elif arg == "pull":
+                    # Only get files from ReMarkable and upload to Zotero
+                    logger.info("Pulling...")
+                    pull(zot, webdav, read_folder)
 
-            else:
-                print("Invalid argument")
-                sys.exit()
+                elif arg == "both":
+                    # Do both
+                    logger.info("Do both...")
+                    # Upload...
+                    push(zot, webdav, folders)
+
+                    # ...and download, add highlighting and sync to Zotero.
+
+                    pull(zot, webdav, read_folder)
+
+                else:
+                    logger.error("Invalid argument")
+                    sys.exit()
+    except Exception as e:
+        logger.error(e)
         
 
 main(sys.argv[1:])
