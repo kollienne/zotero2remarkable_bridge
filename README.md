@@ -42,17 +42,14 @@ git clone https://github.com/Scrybbling-together/zotero2remarkable_bridge.git
 
 # Note: The program requires rmapi to be installed and properly configured. Please refer to rmapi's [Readme](https://github.com/ddvk/rmapi/blob/master/README.md) for instructions.
 
+# requires poetry to install
+# https://python-poetry.org/
 # 2. Add required packages through pip:
-pip3 install -r requirements.txt
-
-# 3. (Only on Linux) Allow execution of the program:
-sudo chmod +x zotero2remarkable_bridge.py
+poetry install
+poetry env use
 
 # 4. On Linux, run the program with:
-./zotero2remarkable_bridge.py
-
-# Or on any other OS with:
-python3 zotero2remarkable_bridge.py
+python ./zotero2remarkable_bridge.py
 
 # At first run, it will guide you through creating a working
 # config. It will help you setup authentication with Zotero, WebDAV (optional), and
