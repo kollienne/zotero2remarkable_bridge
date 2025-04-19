@@ -1,6 +1,5 @@
 import os
 import zipfile
-import yaml
 import tempfile
 import hashlib
 import rmapi_shim as rmapi
