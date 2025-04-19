@@ -13,7 +13,7 @@ from time import sleep
 from datetime import datetime
 
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 def sync_to_rm(item, zot, folders):
     temp_path = Path(tempfile.gettempdir())
@@ -78,7 +78,7 @@ def sync_to_rm_webdav(item, zot, webdav, folders):
             logger.info("Found attachment, but it's not a PDF, skipping...")
 
 
-def download_from_rm(entity, folder, content_id):
+def download_from_rm(entity, folder):
     temp_path = Path(tempfile.gettempdir())
     logger.info(f"Processing {entity}...")
     zip_name = f"{entity}.zip"
@@ -88,14 +88,12 @@ def download_from_rm(entity, folder, content_id):
     if download:
         logger.info("File downloaded")
     else:
-        logger.warn("Failed to download file")
+        logger.warning("Failed to download file")
 
     with zipfile.ZipFile(file_path, "r") as zf:
         zf.extractall(unzip_path)
 
-    renderer = remarks
-    args = {"combined_pdf": True, "combined_md": False, "ann_type": ["scribbles", "highlights"]}
-    renderer.run_remarks(unzip_path, temp_path, **args)
+    remarks.run_remarks(unzip_path, temp_path)
     logging.info("PDF rendered")
     pdf = (temp_path / f"{entity} _remarks.pdf")
     pdf = pdf.rename(pdf.with_stem(f"{entity}"))
@@ -119,26 +117,21 @@ def zotero_upload(pdf_name, zot):
                 pdf_name.rename(new_pdf_name)
                 upload = zot.attachment_simple([new_pdf_name], item_id)                
                 
-                if upload["success"] != []:
+                if upload["success"]:
                     logging.info(f"{pdf_name} uploaded to Zotero.")
                 else:
                     logging.error(f"Upload of {pdf_name} failed...")
                 return
 
 
-def get_md5(pdf):
+def get_md5(pdf) -> None | str:
     if pdf.is_file():
         with open(pdf, "rb") as f:
-            bytes = f.read()
-            md5 = hashlib.md5(bytes).hexdigest()
-    else:
-        md5 = None
-    return md5
+            return hashlib.md5(f.read()).hexdigest()
 
 
-def get_mtime():
-    mtime = datetime.now().strftime('%s')
-    return mtime
+def get_mtime() -> str:
+    return datetime.now().strftime('%s')
 
 
 def fill_template(item_template, pdf_name):
@@ -175,7 +168,7 @@ def zotero_upload_webdav(pdf_name, zot, webdav):
                 filled_item_template = fill_template(item_template, pdf_name)
                 create_attachment = zot.create_items([filled_item_template], item_id)
                 
-                if create_attachment["success"] != []:
+                if create_attachment["success"]:
                     key = create_attachment["success"]["0"]
                 else:
                     logging.info("Failed to create attachment, aborting...")
@@ -188,7 +181,7 @@ def zotero_upload_webdav(pdf_name, zot, webdav):
                 
                 attachment_upload = webdav_uploader(webdav, remote_attachment_zip, attachment_zip)
                 if attachment_upload:
-                    logging.info("Attachment upload successfull, proceeding...")
+                    logging.info("Attachment upload successful, proceeding...")
                 else:
                     logging.error("Failed uploading attachment, skipping...")
                     continue

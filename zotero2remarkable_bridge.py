@@ -6,20 +6,23 @@ from tqdm import tqdm
 from config_functions import *
 from sync_functions import *
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 logger.addHandler(logging.FileHandler(filename="sync.log"))
 
 def push(zot, webdav, folders):
     sync_items = zot.items(tag="to_sync")
-    logger.info(f"Found {len(sync_items)} elements to sync...")
-    for item in tqdm(sync_items):
-        if webdav:
-            sync_to_rm_webdav(item, zot, webdav, folders)
-        else:
-            sync_to_rm(item, zot, folders)
-    # zot.delete_tags("to_sync")
+    if sync_items:
+        logger.info(f"Found {len(sync_items)} PDF attachments on the zotero to sync...")
+        for item in tqdm(sync_items):
+            if webdav:
+                sync_to_rm_webdav(item, zot, webdav, folders)
+            else:
+                sync_to_rm(item, zot, folders)
+    else:
+        logger.info("No PDF attachments to sync, all clear :)")
+    zot.delete_tags("to_sync")
 
 
 def pull(zot, webdav, read_folder):

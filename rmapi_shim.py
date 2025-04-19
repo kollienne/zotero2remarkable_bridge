@@ -2,7 +2,7 @@ import subprocess
 import json
 import logging
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 def check_rmapi():
     check = subprocess.run(["./rmapi", "ls"])
