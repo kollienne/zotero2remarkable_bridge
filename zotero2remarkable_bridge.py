@@ -29,8 +29,7 @@ def pull(zot, webdav, read_folder):
     files_list = rmapi.get_files(read_folder)
     if files_list:
         for entity in tqdm(files_list):
-            content_id = rmapi.get_metadata(f"{read_folder}{entity}")["ID"]
-            pdf_name = download_from_rm(entity, read_folder, content_id)
+            pdf_name = download_from_rm(entity, read_folder)
             if webdav:
                 zotero_upload_webdav(pdf_name, zot, webdav)
             else:

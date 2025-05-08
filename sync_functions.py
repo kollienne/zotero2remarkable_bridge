@@ -85,7 +85,7 @@ def download_from_rm(entity, folder):
     file_path = temp_path / zip_name
     unzip_path = temp_path / f"{entity}-unzipped"
     download = rmapi.download_file(f"{folder}{entity}", str(temp_path))
-    if download:
+    if download == 0:
         logger.info("File downloaded")
     else:
         logger.warning("Failed to download file")
@@ -93,9 +93,11 @@ def download_from_rm(entity, folder):
     with zipfile.ZipFile(file_path, "r") as zf:
         zf.extractall(unzip_path)
 
-    remarks.run_remarks(unzip_path, temp_path)
+    print("zip extracted")
+    remarks.run_remarks(str(unzip_path), str(temp_path))
+    print("remarks run")
     logging.info("PDF rendered")
-    pdf = (temp_path / f"{entity} _remarks.pdf")
+    pdf = Path(temp_path / f"{entity} _remarks.pdf")
     pdf = pdf.rename(pdf.with_stem(f"{entity}"))
     pdf_name = pdf.name
 
@@ -103,24 +105,29 @@ def download_from_rm(entity, folder):
     file_path.unlink()
     rmtree(unzip_path)
 
+    print("download done")
     return pdf_name
 
 
 def zotero_upload(pdf_name, zot):
+    temp_path = Path(tempfile.gettempdir())
     for item in zot.items(tag="synced"):
         item_id = item["key"]
         for attachment in zot.children(item_id):
             if "filename" in attachment["data"] and attachment["data"]["filename"] == pdf_name:
                 #zot.delete_item(attachment)
                 # Keeping the original seems to be the more sensible thing to do
-                new_pdf_name = pdf_name.with_stem(f"(Annot) {pdf_name.stem}")
-                pdf_name.rename(new_pdf_name)
-                upload = zot.attachment_simple([new_pdf_name], item_id)                
+                pdf_name = temp_path / pdf_name
+                pdf_path = Path(pdf_name)
+                new_pdf_path = pdf_path.with_stem(f"(Annot) {pdf_path.stem}")
+                pdf_path.rename(new_pdf_path)
+                print(f"new_pdf_path: `{new_pdf_path}")
+                upload = zot.attachment_simple([str(new_pdf_path)], item_id)
                 
                 if upload["success"]:
-                    logging.info(f"{pdf_name} uploaded to Zotero.")
+                    logging.info(f"{pdf_path} uploaded to Zotero.")
                 else:
-                    logging.error(f"Upload of {pdf_name} failed...")
+                    logging.error(f"Upload of {pdf_path} failed...")
                 return
 
 
