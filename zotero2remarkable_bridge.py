@@ -29,6 +29,23 @@ def pull(zot, webdav, read_folder):
     files_list = rmapi.get_files(read_folder)
     if files_list:
         for entity in tqdm(files_list):
+            metadata = rmapi.get_metadata(f"{read_folder}/{entity}")
+            if metadata is not False:
+                modified_time = datetime.fromisoformat(metadata["ModifiedClient"])
+                zotero_last_modified_time = zotero_get_last_modified_time(entity, zot)
+                if zotero_last_modified_time is not None:
+                    if zotero_last_modified_time is False:
+                        logger.info("No Zotero last modified time found, downloading anyway...")
+                    elif modified_time > zotero_last_modified_time:
+                        logger.info(f"File {entity} is newer on reMarkable, downloading...")
+                    else:
+                        logger.info(f"File {entity} is newer on Zotero, skipping...")
+                        continue
+                else:
+                    logger.info(f"File {entity} not found in Zotero, skipping...")
+            else:
+                logger.info("Metadata not found, downloading anyway for safety...")
+            breakpoint()
             pdf_name = download_from_rm(entity, read_folder)
             if webdav:
                 zotero_upload_webdav(pdf_name, zot, webdav)
@@ -46,7 +63,7 @@ def main(argv):
         write_config("config.yml")
         zot, webdav, folders = load_config("config.yml")
     read_folder = f"/Zotero/{folders['read']}/"
-    
+
     try:
         opts, args = getopt.getopt(argv, "m:")
     except getopt.GetoptError:
@@ -81,6 +98,6 @@ def main(argv):
                     sys.exit()
     except Exception as e:
         logger.error(e)
-        
+
 
 main(sys.argv[1:])

@@ -25,7 +25,7 @@ def sync_to_rm(item, zot, folders):
             attachment_id = attachments[attachments.index(entry)]["key"]
             attachment_name = zot.item(attachment_id)["data"]["filename"]
             logger.info(f"Processing {attachment_name}...")
-                
+
             # Get actual file and repack it in reMarkable's file format
             zot.dump(attachment_id, path=temp_path)
             file_name = temp_path / attachment_name
@@ -38,8 +38,8 @@ def sync_to_rm(item, zot, folders):
                     logger.error(f"Failed to upload {attachment_name} to reMarkable.")
         else:
             logger.warning("Found attachment, but it's not a PDF, skipping...")
-        
-       
+
+
 def sync_to_rm_webdav(item, zot, webdav, folders):
     temp_path = Path(tempfile.gettempdir())
     item_id = item["key"]
@@ -49,7 +49,7 @@ def sync_to_rm_webdav(item, zot, webdav, folders):
             attachment_id = attachments[attachments.index(entry)]["key"]
             attachment_name = zot.item(attachment_id)["data"]["filename"]
             logger.info(f"Processing {attachment_name}...")
-    
+
             # Get actual file from webdav, extract it and repack it in reMarkable's file format
             file_name = f"{attachment_id}.zip"
             file_path = Path(temp_path / file_name)
@@ -62,9 +62,9 @@ def sync_to_rm_webdav(item, zot, webdav, folders):
                 uploader = rmapi.upload_file(str(unzip_path / attachment_name), f"/Zotero/{folders['unread']}")
             else:
                 """ #TODO: Sometimes Zotero does not seem to rename attachments properly,
-                    leading to reported file names diverging from the actual one. 
+                    leading to reported file names diverging from the actual one.
                     To prevent this from stopping the whole program due to missing
-                    file errors, skip that file. Probably it could be worked around better though.""" 
+                    file errors, skip that file. Probably it could be worked around better though."""
                 logger.warning("PDF not found in downloaded file. Filename might be different. Try renaming file in Zotero, sync and try again.")
                 break
             if uploader:
@@ -108,6 +108,34 @@ def download_from_rm(entity, folder):
     print("download done")
     return pdf_name
 
+def _match_variations(rm_name, zot_name):
+    if rm_name == zot_name:
+        return True
+    if zot_name == f"(Annot) {rm_name}":
+        return True
+    if zot_name == f"{rm_name}.pdf":
+        return True
+    if zot_name == f"(Annot) {rm_name}.pdf":
+        return True
+    return False
+
+def zotero_get_last_modified_time(pdf_name, zot):
+    file_found = False
+    most_recent_date = None
+    for item in zot.items(tag="synced"):
+        item_id = item["key"]
+        for attachment in zot.children(item_id):
+            if "filename" in attachment["data"] and _match_variations(pdf_name, attachment["data"]["filename"]):
+                file_found = True
+                if "dateModified" in attachment["data"]:
+                    date_modified = datetime.fromisoformat(attachment["data"]["dateModified"])
+                    if most_recent_date is None or date_modified > most_recent_date:
+                        most_recent_date = date_modified
+    if most_recent_date is not None:
+        return most_recent_date
+    if file_found:
+        return False # File found, but no date modified
+    return None
 
 def zotero_upload(pdf_name, zot):
     temp_path = Path(tempfile.gettempdir())
@@ -123,7 +151,7 @@ def zotero_upload(pdf_name, zot):
                 pdf_path.rename(new_pdf_path)
                 print(f"new_pdf_path: `{new_pdf_path}")
                 upload = zot.attachment_simple([str(new_pdf_path)], item_id)
-                
+
                 if upload["success"]:
                     logging.info(f"{pdf_path} uploaded to Zotero.")
                 else:
@@ -174,18 +202,18 @@ def zotero_upload_webdav(pdf_name, zot, webdav):
                 pdf_name = new_pdf_name
                 filled_item_template = fill_template(item_template, pdf_name)
                 create_attachment = zot.create_items([filled_item_template], item_id)
-                
+
                 if create_attachment["success"]:
                     key = create_attachment["success"]["0"]
                 else:
                     logging.info("Failed to create attachment, aborting...")
                     continue
-                
+
                 attachment_zip = temp_path / f"{key}.zip"
                 with zipfile.ZipFile(attachment_zip, "w") as zf:
                     zf.write(pdf_name, arcname=pdf_name.name)
                 remote_attachment_zip = attachment_zip.name
-                
+
                 attachment_upload = webdav_uploader(webdav, remote_attachment_zip, attachment_zip)
                 if attachment_upload:
                     logging.info("Attachment upload successful, proceeding...")
@@ -194,28 +222,28 @@ def zotero_upload_webdav(pdf_name, zot, webdav):
                     continue
 
                 """For the file to be properly recognized in Zotero, a propfile needs to be
-                uploaded to the same folder with the same ID. The content needs 
+                uploaded to the same folder with the same ID. The content needs
                 to match exactly Zotero's format."""
                 propfile_content = f'<properties version="1"><mtime>{item_template["mtime"]}</mtime><hash>{item_template["md5"]}</hash></properties>'
                 propfile = temp_path / f"{key}.prop"
                 with open(propfile, "w") as pf:
                     pf.write(propfile_content)
                 remote_propfile = f"{key}.prop"
-                
+
                 propfile_upload = webdav_uploader(webdav, remote_propfile, propfile)
                 if propfile_upload:
                     logging.info("Propfile upload successful, proceeding...")
                 else:
                     logging.error("Propfile upload failed, skipping...")
                     continue
-                            
+
                 zot.add_tags(item, "read")
                 logging.info(f"{pdf_name.name} uploaded to Zotero.")
                 (temp_path / pdf_name).unlink()
                 (temp_path / attachment_zip).unlink()
                 (temp_path / propfile).unlink()
                 return pdf_name
-            
+
 
 def get_sync_status(zot):
     read_list = []
@@ -223,5 +251,5 @@ def get_sync_status(zot):
         for attachment in zot.children(item["key"]):
             if "contentType" in attachment["data"] and attachment["data"]["contentType"] == "application/pdf":
                 read_list.append(attachment["data"]["filename"])
-    
+
     return read_list
