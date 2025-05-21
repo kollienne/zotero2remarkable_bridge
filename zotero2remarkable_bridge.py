@@ -45,7 +45,6 @@ def pull(zot, webdav, read_folder):
                     logger.info(f"File {entity} not found in Zotero, skipping...")
             else:
                 logger.info("Metadata not found, downloading anyway for safety...")
-            breakpoint()
             pdf_name = download_from_rm(entity, read_folder)
             if webdav:
                 zotero_upload_webdav(pdf_name, zot, webdav)
